@@ -105,36 +105,24 @@ def process_with_dependents(boxes, dependents, box, level):
 
             if isinstance(dependent, Box):
 
-                if dependent.direction == 'right':
-                    dependent.position[0] = box.position[0] + box.dimensions[0] + dependent.offset
-                elif dependent.direction == 'left':
-                    dependent.position[0] = box.position[0] - dependent.dimensions[0] + dependent.offset
-                elif dependent.direction == 'behind':
-                    dependent.position[1] = box.position[1] + box.dimensions[1] + dependent.offset
-                elif dependent.direction == 'front':
-                    dependent.position[1] = box.position[1] - dependent.dimensions[1] + dependent.offset
-                elif dependent.direction == 'above':
-                    dependent.position[1] = box.position[2] + box.dimensions[2] + dependent.offset
-                elif dependent.direction == 'below':
-                    dependent.position[1] = box.position[2] - dependent.dimensions[2] + dependent.offset
+                for index, direction in enumerate(['right', 'behind', 'above']):
+                    if dependent.direction == direction:
+                        dependent.position[index] = box.position[index] + box.dimensions[index]
 
-                if 'left' in dependent.alignment:
-                    dependent.position[0] = box.position[0]
-                elif 'right' in dependent.alignment:
-                    dependent.position[0] = box.position[0] + box.dimensions[0] - dependent.dimensions[0]
+                for index, direction in enumerate(['left', 'front', 'below']):
+                    if dependent.direction == direction:
+                        dependent.position[index] = box.position[index] - dependent.dimensions[index]
 
-                if 'front' in dependent.alignment:
-                    dependent.position[1] = box.position[1]
-                elif 'back' in dependent.alignment:
-                    dependent.position[1] = box.position[1] + box.dimensions[1] - dependent.dimensions[1]
+                for index, direction in enumerate(['left', 'front', 'bottom']):
+                    if direction in dependent.alignment:
+                        dependent.position[index] = box.position[index] + dependent.offset
 
-                if 'bottom' in dependent.alignment:
-                    dependent.position[2] = box.position[2]
-                elif 'top' in dependent.alignment:
-                    dependent.position[1] = box.position[1] + box.dimensions[1] - dependent.dimensions[1]
+                for index, direction in enumerate(['right', 'back', 'top']):
+                    if direction in dependent.alignment:
+                        dependent.position[index] = box.position[index] + box.dimensions[index] - dependent.dimensions[index] + dependent.offset
 
-                elif isinstance(dependent, Hole):
-                    box.holes.append(dependent)
+            elif isinstance(dependent, Hole):
+                box.holes.append(dependent)
 
             process_with_dependents(boxes, dependents, dependent, level)
 
