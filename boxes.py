@@ -4,17 +4,18 @@ import argparse
 import csv
 
 PREAMBLE = """
-wall_thickness = 10;
-floor_thickness = 10;
+wall_thickness = %g;
+floor_thickness = %g;
+ceiling_thickness = %g;
 
-module box(x, y, z, width, depth, height, opacity, label) {
+module box(position, dimensions, opacity, label) {
     color([.5, .5, .5, .5]) {
-        translate([x, y, z]) {
-            // make this hollow by subtracting an inner cube
+        translate(position) {
+            // make this hollow by subtracting an inner cuboid
             difference() {
-                cube([width, depth, height]);
-                translate([wall_thickness, wall_thickness, floor_thickness]) {
-                    cube([width-2*wall_thickness, depth-2*wall_thickness, height]);
+                cube(dimensions);
+                translate([wall_thickness/2, wall_thickness/2, floor_thickness]) {
+                    cube([dimensions[0]-wall_thickness, dimensions[1]-wall_thickness, dimensions[2]-floor_thickness]);
                 }
             }
         }
@@ -25,55 +26,128 @@ POSTAMBLE = """"""
 
 class Box(object):
 
+    """A cuboid positive space, such as a room, box, or shelf and the space it supports.
+    Not a hole such as a door or window."""
+
     pass
 
     def __init__(self, data):
+        self.box_type = data.get('type', 'room')
         self.location = data.get('location')
-        self.width = float(data.get('width'))
-        self.depth = float(data.get('depth'))
-        self.height = float(data.get('height'))
+        self.dimensions = [float(data.get('width')),
+                           float(data.get('depth')),
+                           float(data.get('height'))]
+        self.position = [0.0, 0.0, 0.0]
         self.adjacent = data.get('adjacent')
         self.direction = data.get('direction')
         self.alignment = data.get('alignment')
+        self.offset = data.get('offset', 0.0)
         self.opacity = 1.0
-        self.x = 0.0
-        self.y = 0.0
-        self.z = 0.0
 
     def __str__(self):
-        return "<box %s of size [%g, %g, %g] at (%g, %g, %g) to %s of %s, %s-aligned>" % (
+        return "<box %s of size %s at %s to %s of %s, %s-aligned>" % (
             self.location,
-            self.width, self.depth, self.height,
-            self.x, self.y, self.z,
+            self.dimensions,
+            self.position,
             self.direction, self.adjacent, self.alignment)
 
     def write_scad(self, stream):
-        stream.write("""box(%g, %g, %g, %g, %g, %g, %g, "%s");\n""" % (
-            self.x, self.y, self.z,
-            self.width, self.depth, self.height,
+        stream.write("""box(%s, %s, %g, "%s");\n""" % (
+            self.position,
+            self.dimensions,
             self.opacity, self.location))
+
+class Hole(object):
+
+    """A cuboid negative space to punch out of the wall of a box such as room.
+    This represents doors and windows."""
+
+    pass
+
+    def __init__(self, data):
+        self.dimensions = [float(data.get('width')),
+                           float(data.get('depth')), # from bottom to top of the hole
+                           float(data.get('height'))] # from the floor to the bottom of the hole
+        self.cut_out_from = data.get('adjacent')      # the room that this hole is in one of the walls of
+        self.direction = data.get('direction')        # which wall the hole is in (front, left, back, right)
+        self.offset = data.get('offset', 0.0)
+
+class Constant(object):
+
+    """A constant definition."""
+
+    pass
+
+    def __init__(self, data):
+        self.name = data['location']
+        self.value = data['width']
+        self.all_data = data
+
+# Define all the names for each of the functions to make an object
+# from a spreadsheet row (since there are multiple names for each
+# function, it is neater to write them this way, then invert the
+# table):
+names_for_makers = {
+    lambda row: Box(row): ('room', 'shelf', 'shelves', 'box'),
+    lambda row: Hole(row): ('door', 'window'),
+    lambda row: Constant(row): ('constant',)}
+
+# Invert the table, so we can look up row types in it:
+makers = {
+    name: maker
+    for maker, names in names_for_makers.items()
+    for name in names}
 
 def process_with_dependents(boxes, dependents, box, level):
     if box.location in dependents:
         for dependent_name in dependents[box.location]:
             dependent = boxes[dependent_name]
-            if dependent.direction == 'left':
-                dependent.x = box.x - dependent.width
-            elif dependent.direction == 'right':
-                dependent.x = box.x + box.width
-            elif dependent.direction == 'behind':
-                dependent.y = box.y + box.depth
-            elif dependent.direction == 'front':
-                dependent.y = box.y - dependent.depth
-            if dependent.alignment == 'left':
-                dependent.x = box.x
-            elif dependent.alignment == 'right':
-                dependent.x = box.x + box.width - dependent.width
-            elif dependent.alignment == 'front':
-                dependent.y = box.y
-            elif dependent.alignment == 'back':
-                dependent.y = box.y + box.depth - dependent.depth
+
+            if isinstance(dependent, Box):
+
+                if dependent.direction == 'right':
+                    dependent.position[0] = box.position[0] + box.dimensions[0] + dependent.offset
+                elif dependent.direction == 'left':
+                    dependent.position[0] = box.position[0] - dependent.dimensions[0] + dependent.offset
+                elif dependent.direction == 'behind':
+                    dependent.position[1] = box.position[1] + box.dimensions[1] + dependent.offset
+                elif dependent.direction == 'front':
+                    dependent.position[1] = box.position[1] - dependent.dimensions[1] + dependent.offset
+                elif dependent.direction == 'above':
+                    dependent.position[1] = box.position[2] + box.dimensions[2] + dependent.offset
+                elif dependent.direction == 'below':
+                    dependent.position[1] = box.position[2] - dependent.dimensions[2] + dependent.offset
+
+                if 'left' in dependent.alignment:
+                    dependent.position[0] = box.position[0]
+                elif 'right' in dependent.alignment:
+                    dependent.position[0] = box.position[0] + box.dimensions[0] - dependent.dimensions[0]
+
+                if 'front' in dependent.alignment:
+                    dependent.position[1] = box.position[1]
+                elif 'back' in dependent.alignment:
+                    dependent.position[1] = box.position[1] + box.dimensions[1] - dependent.dimensions[1]
+
+                if 'bottom' in dependent.alignment:
+                    dependent.position[2] = box.position[2]
+                elif 'top' in dependent.alignment:
+                    dependent.position[1] = box.position[1] + box.dimensions[1] - dependent.dimensions[1]
+
+                elif isinstance(dependent, Hole):
+                    box.holes.append(dependent)
+
             process_with_dependents(boxes, dependents, dependent, level)
+
+DEFAULT_CONSTANTS = {
+    'wall_thickness': 10,
+    'floor_thickness': 10,
+    'ceiling_thickness': -1     # so we can see into rooms from above
+}
+
+def add_default_constants(boxes):
+    for default_name, default_value in DEFAULT_CONSTANTS.items():
+        if default_name not in boxes:
+            boxes[default_name] = Constant({'location': default_name, 'width': default_value})
 
 def main():
     parser = argparse.ArgumentParser()
@@ -82,9 +156,10 @@ def main():
     args = parser.parse_args()
 
     with open(args.inputfile) as instream:
-        boxes = {row['location']: Box(row)
+        boxes = {row['location']: makers[row.get('type', 'room')](row)
                        for row in csv.DictReader(instream)}
 
+    # Work out the tree structure of what depends on what:
     dependents = {}
     for box in boxes.values():
         adjacent = box.adjacent
@@ -98,15 +173,28 @@ def main():
     if 'start' not in dependents:
         print("No starting point given")
 
-    first_box.x = 0.0
-    first_box.y = 0.0
-    first_box.z = 0.0
+    add_default_constants(boxes)
+
+    wall_thickness = boxes['wall_thickness'].value
+    floor_thickness = boxes['floor_thickness'].value
+    ceiling_thickness = boxes['ceiling_thickness'].value
+
+    # The dimensions of rooms are presumed to be given as internal:
+    for box in boxes.values():
+        if isinstance(box, Box) and box.box_type == 'room':
+            box.dimensions[0] += wall_thickness # one half-thickness at each side
+            box.dimensions[1] += wall_thickness # one half-thickness at each end
+            box.dimensions[2] += floor_thickness + ceiling_thickness
+
+    # Now process the tree
+    first_box.position = [0.0, 0.0, 0.0]
     process_with_dependents(boxes, dependents, first_box, 1)
 
     with open(args.output, 'w') as outstream:
-        outstream.write(PREAMBLE)
+        outstream.write(PREAMBLE % (wall_thickness, floor_thickness, ceiling_thickness))
         for box in boxes.values():
-            box.write_scad(outstream)
+            if isinstance(box, Box):
+                box.write_scad(outstream)
         outstream.write(POSTAMBLE)
 
 if __name__ == '__main__':
