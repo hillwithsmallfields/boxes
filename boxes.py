@@ -8,12 +8,12 @@ wall_thickness = %g;
 floor_thickness = %g;
 ceiling_thickness = %g;
 
-module hole(preshift, rot, postshift, dimensions) {
+module hole(preshift, rot, postshift, dimensions, label) {
     translate(preshift) rotate(rot) translate(postshift) cube(dimensions);
 }
 
-module box(position, dimensions, opacity, label) {
-    color([.5, .5, .5, .5]) {
+module box(position, dimensions, colour, label) {
+    color(colour) {
         translate(position) {
             // make this hollow by subtracting an inner cuboid
             difference() {
@@ -63,7 +63,10 @@ class Box(object):
         self.alignment = data.get('alignment')
         self.offset = data.get('offset', 0.0) or 0.0
         self.holes = []
-        self.opacity = 1.0
+        self.colour = data.get('colour', [.5, .5, .5, .5])
+        if self.colour == "":
+            self.colour = [.5, .5, .5, .5]
+        print(self.name, "has colour", self.colour)
 
     def __str__(self):
         return "<box %s of size %s at %s to %s of %s, %s-aligned>" % (
@@ -73,10 +76,11 @@ class Box(object):
             self.direction, self.adjacent, self.alignment)
 
     def write_scad(self, stream):
-        stream.write("""box(%s, %s, %g, "%s") {\n""" % (
+        stream.write("""box(%s, %s, %s, "%s") {\n""" % (
             self.position,
             self.dimensions,
-            self.opacity, self.name))
+            ('"%s"' % self.colour) if isinstance(self.colour, str) else self.colour,
+            self.name))
         for hole in self.holes:
             hole.write_scad(stream)
         stream.write("""};\n""")
