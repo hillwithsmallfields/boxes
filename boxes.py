@@ -66,7 +66,6 @@ class Box(object):
         self.colour = data.get('colour', [.5, .5, .5, .5])
         if self.colour == "":
             self.colour = [.5, .5, .5, .5]
-        print(self.name, "has colour", self.colour)
 
     def __str__(self):
         return "<box %s of size %s at %s to %s of %s, %s-aligned>" % (
@@ -82,7 +81,7 @@ class Box(object):
             ('"%s"' % self.colour) if isinstance(self.colour, str) else self.colour,
             self.name))
         for hole in self.holes:
-            hole.write_scad(stream)
+            hole.write_scad(stream, self)
         stream.write("""};\n""")
 
 def cell_as_float(row, name):
@@ -100,20 +99,19 @@ class Hole(object):
         self.name = data['name']
         self.dimensions = [float(data.get('width')),  # from one side of the hole to the other
                            float(data.get('depth')),  # from bottom to top of the hole
-                           0]                         # fill in the thickness of the hole later
+                           40]                        # fill in the thickness of the hole later
         self.adjacent = data.get('adjacent')          # the room that this hole is in one of the walls of
         self.direction = data.get('direction')        # which wall the hole is in (front, left, back, right)
         self.height = cell_as_float(data, 'height')   # from the floor to the bottom of the hole
         self.offset = cell_as_float(data, 'offset')   # how far from the start of the wall the hole starts
-        self.preshift = [0, 0, 0]                     # translate to the start of the wall the hole is in
-        self.rotate = 0                               # rotate to match the wall
-        self.postshift = [0, 0, 0]                    # translate to the right place on the wall
 
-    def write_scad(self, stream):
-        stream.write("""    hole(%s, %s, %s, %s, "%s");\n""" % (
-            self.preshift,
-            self.rotate,
-            self.postshift,
+    def write_scad(self, stream, parent):
+        # 10=floor_thickness
+        stream.write("""    hole([%g, %g, 10], [90, 0, %g], [%g, %g, -40], %s, "%s");\n""" % (
+            parent.dimensions[0] if self.direction == 'right' else 0,
+            parent.dimensions[1] if self.direction == 'back' else 0,
+            90 if self.direction in ('left', 'right') else 0,
+            self.offset, self.height,
             self.dimensions,
             self.name))
 
@@ -245,7 +243,7 @@ def main():
             box.dimensions[1] += wall_thickness # one half-thickness at each end
             box.dimensions[2] += floor_thickness + ceiling_thickness
         elif isinstance(box, Hole):
-            box.dimensions[2] = wall_thickness * 2
+            box.dimensions[2] = wall_thickness * 8 # make sure it gets through
 
     # Now process the tree
     first_box.position = [0.0, 0.0, 0.0]
