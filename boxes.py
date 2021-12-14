@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import argparse
 import csv
@@ -45,6 +45,7 @@ POSTAMBLE = """"""
 # """
 
 class Box(object):
+
 
     """A cuboid positive space, such as a room, box, or shelf and the space it supports.
     Not a hole such as a door or window."""
