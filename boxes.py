@@ -69,6 +69,10 @@ class Box:
         self.alignment = data.get('alignment')
         self.offset = data.get('offset', 0.0) or 0.0
         self.holes = []
+        self.neighbours = {'left': [],
+                           'right': [],
+                           'front': [],
+                           'behind': []}
         self.colour = data.get('colour', [.5, .5, .5, .5])
         if self.colour == "":
             self.colour = [.5, .5, .5, .5]
@@ -185,9 +189,9 @@ makers = {
     for maker, names in names_for_makers.items()
     for name in names}
 
-def process_with_dependents(boxes, dependents, box, level):
+def position_dependents(boxes, dependents, box, level):
     """Position boxes dependent on a given box.
-    Then position their dependents etc."""
+    Then position their dependents, etc."""
     if box.name in dependents:
         for dependent_name in dependents[box.name]:
             dependent = boxes[dependent_name]
@@ -219,7 +223,7 @@ def process_with_dependents(boxes, dependents, box, level):
             elif isinstance(dependent, Hole):
                 box.holes.append(dependent)
 
-            process_with_dependents(boxes, dependents, dependent, level)
+            position_dependents(boxes, dependents, dependent, level)
 
 DEFAULT_CONSTANTS = {
     'wall_thickness': 10,
@@ -237,7 +241,7 @@ def read_layout(filename):
     """Read a file of layout data."""
     with open(filename) as instream:
         return {row['name']: makers[row.get('type', 'room')](row)
-                       for row in csv.DictReader(instream)}
+                for row in csv.DictReader(instream)}
 
 def adjust_dimensions(boxes):
     """Add some dimensional details."""
@@ -274,11 +278,21 @@ def generate_tree(boxes):
             dependents[adjacent].append(box.name)
     return dependents, first_box
 
-def make_scad_layout(input_file_name, output_file_name):
+def show_tree(dependents, start='start', depth=0):
+    """Show a tree of dependents."""
+    if start in dependents:
+        for child in dependents[start]:
+            print("|   " * depth + child)
+            show_tree(dependents, child, depth+1)
+
+def make_scad_layout(input_file_name, output_file_name, verbose=False):
     """Read a layout definition file and produce a 3D model file from it."""
     boxes = read_layout(input_file_name)
 
     dependents, first_box = generate_tree(boxes)
+
+    if verbose:
+        show_tree(dependents)
 
     if 'start' not in dependents:
         print("No starting point given")
@@ -287,7 +301,7 @@ def make_scad_layout(input_file_name, output_file_name):
 
     # Now process the tree
     first_box.position = [0.0, 0.0, 0.0]
-    process_with_dependents(boxes, dependents, first_box, 1)
+    position_dependents(boxes, dependents, first_box, 1)
 
     with open(output_file_name, 'w') as outstream:
         outstream.write("""// Produced from %s\n""" % input_file_name)
@@ -301,9 +315,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("inputfile")
     parser.add_argument("--output", "-o")
+    parser.add_argument("--verbose", "-v", action='store_true')
     args = parser.parse_args()
 
-    make_scad_layout(args.inputfile, args.output)
+    make_scad_layout(args.inputfile, args.output, args.verbose)
 
 if __name__ == '__main__':
     main()
