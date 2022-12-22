@@ -29,8 +29,17 @@ module box(position, dimensions, colour, label) {
     }
 }
 
+difference() {
+  union() {
 """
-POSTAMBLE = """"""
+
+INTERAMBLE = """  }
+  union() {
+"""
+
+POSTAMBLE = """  }
+}
+"""
 
 # scratch = """
 # box([0.0, 0.0, 0.0], [435.0, 385.0, 253.0], 1, "Living room") {
@@ -85,15 +94,15 @@ class Box:
             self.direction, self.adjacent, self.alignment)
 
     def write_scad(self, stream):
-        """Write the SCAD code for this box."""
-        stream.write("""box(%s, %s, %s, "%s") {\n""" % (
+        """Write the SCAD code for this box.
+        Return a string describing the holes attached the box."""
+        stream.write("""    box(%s, %s, %s, "%s");\n""" % (
             self.position,
             self.dimensions,
             ('"%s"' % self.colour) if isinstance(self.colour, str) else self.colour,
             self.name))
-        for hole in self.holes:
-            hole.write_scad(stream, self)
-        stream.write("""};\n""")
+        return "".join(hole.scad_string(self)
+                       for hole in self.holes)
 
 def cell_as_float(row, name):
     """Convert the contents of a spreadsheet cell to a float.
@@ -125,16 +134,20 @@ class Hole:
     def __str__(self):
         return "<hole %s in box %s>" % (self.name, self.adjacent)
 
-    def write_scad(self, stream, parent):
-        """Write the SCAD code for this hole."""
+    def scad_string(self, parent):
+        """Return the SCAD code for this hole."""
         # 10=floor_thickness
-        stream.write("""    hole([%g, %g, 10], [90, 0, %g], [%g, %g, -40], %s, "%s");\n""" % (
+        return """    hole([%g, %g, 10], [90, 0, %g], [%g, %g, -40], %s, "%s");\n""" % (
             parent.dimensions[0] if self.direction == 'right' else 0,
             parent.dimensions[1] if self.direction == 'back' else 0,
             90 if self.direction in ('left', 'right') else 0,
             self.offset, self.height,
             self.dimensions,
-            self.name))
+            self.name)
+
+    def write_scad(self, stream, parent):
+        """Write the SCAD code for this hole."""
+        stream.write(self.scad_string(parent))
 
 class Constant:
 
@@ -198,6 +211,10 @@ def position_dependents(boxes, dependents, box, level):
 
             if isinstance(dependent, Box):
 
+                # scan through the coordinates: X, Y, Z for
+                # neighbouring boxes that begin where the current one
+                # ends:
+
                 for index, direction in enumerate(['right', 'behind', 'above']):
                     if dependent.direction == direction:
                         dependent.position[index] = (box.position[index]
@@ -207,6 +224,10 @@ def position_dependents(boxes, dependents, box, level):
                     if dependent.direction == direction:
                         dependent.position[index] = (box.position[index]
                                                      - dependent.dimensions[index])
+
+                # scan through the coordinates: X, Y, Z for
+                # neighbouring boxes that are coterminous with the
+                # current one:
 
                 for index, direction in enumerate(['left', 'front', 'bottom']):
                     if direction in dependent.alignment:
@@ -306,10 +327,12 @@ def make_scad_layout(input_file_name, output_file_name, verbose=False):
     with open(output_file_name, 'w') as outstream:
         outstream.write("""// Produced from %s\n""" % input_file_name)
         outstream.write(sized_preamble)
-        for box in boxes.values():
-            if isinstance(box, Box):
-                box.write_scad(outstream)
-                outstream.write(POSTAMBLE)
+        holes = "".join(box.write_scad(outstream)
+                        for box in boxes.values()
+                        if isinstance(box, Box))
+        outstream.write(INTERAMBLE)
+        outstream.write(holes)
+        outstream.write(POSTAMBLE)
 
 def main():
     parser = argparse.ArgumentParser()
