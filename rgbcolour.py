@@ -13,11 +13,11 @@ def read_colour_file():
 
 COLOUR_TABLE = None
 
-def rgbcolour(name):
+def rgbcolour(name: str, opacity:float = 1.0):
     global COLOUR_TABLE
     if not COLOUR_TABLE:
         COLOUR_TABLE = read_colour_file()
-    return COLOUR_TABLE[name]
+    return COLOUR_TABLE[name] + [opacity]
 
 # for testing:
 if __name__ == "__main__":

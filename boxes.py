@@ -68,7 +68,7 @@ class Box:
 
     pass
 
-    def __init__(self, data):
+    def __init__(self, data, opacity=1.0):
         self.box_type = data.get('type', 'room')
         self.name = data.get('name')
         self.dimensions = [float(data.get('width')),
@@ -88,7 +88,7 @@ class Box:
         if self.colour == "":
             self.colour = [.5, .5, .5, .5]
         if isinstance(self.colour, str):
-            self.colour = rgbcolour.rgbcolour(self.colour)
+            self.colour = rgbcolour.rgbcolour(self.colour, opacity)
 
     def __str__(self):
         return "<box %s of size %s at %s to %s of %s, %s-aligned>" % (
@@ -194,11 +194,11 @@ class Custom:
 # function, it is neater to write them this way, then invert the
 # table):
 names_for_makers = {
-    lambda row: Box(row): ('room', 'shelf', 'shelves', 'box'),
-    lambda row: Hole(row): ('door', 'window'),
-    lambda row: Constant(row): ('constant',),
-    lambda row: Type(row): ('type',),
-    lambda row: Custom(row): ('__custom__',)}
+    lambda row, opacity: Box(row, opacity): ('room', 'shelf', 'shelves', 'box'),
+    lambda row, _: Hole(row): ('door', 'window'),
+    lambda row, _: Constant(row): ('constant',),
+    lambda row, _: Type(row): ('type',),
+    lambda row, _: Custom(row): ('__custom__',)}
 
 # Invert the table, so we can look up row types in it:
 makers = {
@@ -262,10 +262,10 @@ def add_default_constants(boxes):
         if default_name not in boxes:
             boxes[default_name] = Constant({'name': default_name, 'width': default_value})
 
-def read_layout(filename):
+def read_layout(filename, opacity):
     """Read a file of layout data."""
     with open(filename) as instream:
-        return {row['name']: makers[row.get('type', 'room')](row)
+        return {row['name']: makers[row.get('type', 'room')](row, opacity)
                 for row in csv.DictReader(instream)}
 
 def adjust_dimensions(boxes):
@@ -310,9 +310,9 @@ def show_tree(dependents, start='start', depth=0):
             print("|   " * depth + child)
             show_tree(dependents, child, depth+1)
 
-def make_scad_layout(input_file_name, output_file_name, verbose=False):
+def make_scad_layout(input_file_name:str, output:str, opacity:float = 1.0, verbose:bool=False):
     """Read a layout definition file and produce a 3D model file from it."""
-    boxes = read_layout(input_file_name)
+    boxes = read_layout(input_file_name, opacity)
 
     dependents, first_box = generate_tree(boxes)
 
@@ -328,7 +328,7 @@ def make_scad_layout(input_file_name, output_file_name, verbose=False):
     first_box.position = [0.0, 0.0, 0.0]
     position_dependents(boxes, dependents, first_box, 1)
 
-    with open(output_file_name, 'w') as outstream:
+    with open(output, 'w') as outstream:
         outstream.write("""// Produced from %s\n""" % input_file_name)
         outstream.write(sized_preamble)
         holes = "".join(box.write_scad(outstream)
@@ -340,12 +340,13 @@ def make_scad_layout(input_file_name, output_file_name, verbose=False):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("inputfile")
+    parser.add_argument("input_file_name")
     parser.add_argument("--output", "-o")
+    parser.add_argument("--opacity", "--alpha", "-a", type=float, default=1.0)
     parser.add_argument("--verbose", "-v", action='store_true')
     args = parser.parse_args()
 
-    make_scad_layout(args.inputfile, args.output, args.verbose)
+    make_scad_layout(args.input_file_name, args.output, args.opacity, args.verbose)
 
 if __name__ == '__main__':
     main()
