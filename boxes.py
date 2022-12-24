@@ -262,11 +262,11 @@ def add_default_constants(boxes):
         if default_name not in boxes:
             boxes[default_name] = Constant({'name': default_name, 'width': default_value})
 
-def read_layout(filename, opacity):
+def read_layout(filename:str, opacity:float, limit=None):
     """Read a file of layout data."""
     with open(filename) as instream:
         return {row['name']: makers[row.get('type', 'room')](row, opacity)
-                for row in csv.DictReader(instream)}
+                for row in list(csv.DictReader(instream))[0:limit]}
 
 def adjust_dimensions(boxes):
     """Add some dimensional details."""
@@ -311,9 +311,14 @@ def show_tree(dependents, start='start', depth=0):
             print("|   " * depth + child)
             show_tree(dependents, child, depth+1)
 
-def make_scad_layout(input_file_name:str, output:str, opacity:float = 1.0, verbose:bool=False, debug:bool=False):
+def make_scad_layout(input_file_name:str,
+                     output:str,
+                     opacity:float = 1.0,
+                     verbose:bool=False,
+                     debug:bool=False,
+                     limit=None):
     """Read a layout definition file and produce a 3D model file from it."""
-    boxes = read_layout(input_file_name, opacity)
+    boxes = read_layout(input_file_name, opacity, limit)
 
     dependents, first_box = generate_tree(boxes)
 
@@ -347,9 +352,10 @@ def main():
     parser.add_argument("--opacity", "--alpha", "-a", type=float, default=1.0)
     parser.add_argument("--verbose", "-v", action='store_true')
     parser.add_argument("--debug", "-d", action='store_true')
+    parser.add_argument("--limit", "-l", type=int)
     args = parser.parse_args()
 
-    make_scad_layout(args.input_file_name, args.output, args.opacity, args.verbose, args.debug)
+    make_scad_layout(**vars(args))
 
 if __name__ == '__main__':
     main()
