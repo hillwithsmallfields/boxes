@@ -11,6 +11,7 @@ PREAMBLE0 = """
 wall_thickness = %g;
 floor_thickness = %g;
 ceiling_thickness = %g;
+hole_standback = -wall_thickness * 4;
 
 module hole(preshift, rot, postshift, dimensions, label) {
     translate(preshift) rotate(rot) translate(postshift) cube(dimensions);
@@ -53,21 +54,6 @@ POSTAMBLE = """  }
 
 POSTAMBLEDEBUG = """  }
 """
-
-# scratch = """
-# box([0.0, 0.0, 0.0], [435.0, 385.0, 253.0], 1, "Living room") {
-#      wallrotate = 90;
-#      fromwall = 90;
-#      fromfloor = 70;
-#      width = 245;
-#      height = 135;
-#      rotate([0, 0, wallrotate]) {
-#           translate([fromwall, -10, fromfloor]) {
-#           cube([width, 20, height]);
-#           }
-#      }
-# };
-# """
 
 # The __init__ methods for all the things we read from the CSV files
 # each take the whole CSV row as their input.
@@ -125,6 +111,8 @@ def cell_as_float(row, name):
     value = row.get(name)
     return 0 if value in (None, "") else float(value)
 
+HOLE_DEPTH = 140                 # TODO: get from the settings system, to where it is needed
+
 class Hole:
 
     """A cuboid negative space to punch out of the wall of a box such as room.
@@ -136,7 +124,7 @@ class Hole:
         self.name = data['name']
         self.dimensions = [float(data.get('width')),  # from one side of the hole to the other
                            float(data.get('depth')),  # from bottom to top of the hole
-                           40]                        # fill in the thickness of the hole later
+                           HOLE_DEPTH]                # fill in the thickness of the hole later
         # the room that this hole is in one of the walls of:
         self.adjacent = data.get('adjacent')
         # which wall the hole is in (front, left, back, right):
@@ -152,7 +140,7 @@ class Hole:
     def scad_string(self, parent):
         """Return the SCAD code for this hole."""
         # 10=floor_thickness
-        return """    hole([%g, %g, 10], [90, 0, %g], [%g, %g, -40], %s, "%s");\n""" % (
+        return """    hole([%g, %g, 10], [90, 0, %g], [%g, %g, hole_standback], %s, "%s");\n""" % (
             parent.dimensions[0] if self.direction == 'right' else 0,
             parent.dimensions[1] if self.direction == 'back' else 0,
             90 if self.direction in ('left', 'right') else 0,
@@ -263,6 +251,7 @@ def position_dependents(boxes, dependents, box, level):
 
 DEFAULT_CONSTANTS = {
     'wall_thickness': 10,
+    'hole_depth': 40,
     'floor_thickness': 10,
     'ceiling_thickness': -1     # so we can see into rooms from above
 }
@@ -286,6 +275,7 @@ def adjust_dimensions(boxes):
     wall_thickness = boxes['wall_thickness'].value
     floor_thickness = boxes['floor_thickness'].value
     ceiling_thickness = boxes['ceiling_thickness'].value
+    hole_depth = wall_thickness * 4
 
     # The dimensions of rooms are presumed to be given as internal:
     for box in boxes.values():
