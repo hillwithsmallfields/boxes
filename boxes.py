@@ -24,7 +24,7 @@ module box(position, dimensions, colour, label) {
             difference() {
                 cube(dimensions);
                 translate([wall_thickness/2, wall_thickness/2, floor_thickness]) {
-                    cube([dimensions[0]-wall_thickness, dimensions[1]-wall_thickness, dimensions[2]-floor_thickness]);
+                    cube([dimensions[0]-wall_thickness, dimensions[1]-wall_thickness, dimensions[2]]);
                 }
                 children();
             }
@@ -135,14 +135,15 @@ class Hole:
         self.offset = cell_as_float(data, 'offset')
 
     def __str__(self):
-        return "<hole %s in box %s>" % (self.name, self.adjacent)
+        return "<hole %s %g from start of %s of box %s>" % (self.name, self.offset, self.direction, self.adjacent)
 
     def scad_string(self, parent):
         """Return the SCAD code for this hole."""
-        # 10=floor_thickness
-        return """    hole([%g, %g, 10], [90, 0, %g], [%g, %g, hole_standback], %s, "%s");\n""" % (
-            parent.dimensions[0] if self.direction == 'right' else 0,
-            parent.dimensions[1] if self.direction == 'back' else 0,
+        # hole(preshift, rot, postshift, dimensions, label)
+        return """    hole([%g, %g, %g], [90, 0, %g], [%g, %g, hole_standback], %s, "%s");\n""" % (
+            parent.position[0] + (parent.dimensions[0] if self.direction == 'right' else 0),
+            parent.position[1] + (parent.dimensions[1] if self.direction == 'back' else 0),
+            parent.position[2],
             90 if self.direction in ('left', 'right') else 0,
             self.offset, self.height,
             self.dimensions,
@@ -245,6 +246,7 @@ def position_dependents(boxes, dependents, box, level):
                                                      + dependent.offset)
 
             elif isinstance(dependent, Hole):
+                # TODO: add the position of the current box to the position of the dependent
                 box.holes.append(dependent)
 
             position_dependents(boxes, dependents, dependent, level)
@@ -296,6 +298,8 @@ def generate_tree(boxes):
             continue
         adjacent = box.adjacent
         if adjacent == 'start':
+            if 'start' in dependents:
+                print("There should be only one box dependent on 'start'.")
             dependents['start'] = [box.name]
             first_box = box
         else:
