@@ -353,17 +353,26 @@ def make_scad_layout(input_file_name:str,
         outstream.write(holes)
         outstream.write(POSTAMBLEDEBUG if debug else POSTAMBLE)
 
-def main():
+def get_args():
+    """Get the command line args."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_file_name")
-    parser.add_argument("--output", "-o")
-    parser.add_argument("--opacity", "--alpha", "-a", type=float, default=1.0)
-    parser.add_argument("--verbose", "-v", action='store_true')
-    parser.add_argument("--debug", "-d", action='store_true')
-    parser.add_argument("--limit", "-l", type=int)
-    args = parser.parse_args()
-
-    make_scad_layout(**vars(args))
+    parser.add_argument("input_file_name",
+                        help="""A CSV file with fields as described in the accompanying README.md file.""")
+    parser.add_argument("--output", "-o",
+                        help="""The OpenSCAD file to write the output to.""")
+    parser.add_argument("--opacity", "--alpha", "-a",
+                        type=float, default=1.0,
+                        help="""The opacity of walls, on a scale from 0 (transparent) to 1 (opaque).""")
+    parser.add_argument("--verbose", "-v",
+                        action='store_true',
+                        help="""Show the feature tree.""")
+    parser.add_argument("--debug", "-d",
+                        action='store_true',
+                        help="""Show the negative features as red blocks.""")
+    parser.add_argument("--limit", "-l",
+                        type=int,
+                        help="""Use only this many rows of the input, for incremental debugging.""")
+    return vars(parser.parse_args())
 
 if __name__ == '__main__':
-    main()
+    make_scad_layout(**get_args())
