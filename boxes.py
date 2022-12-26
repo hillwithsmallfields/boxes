@@ -112,6 +112,8 @@ def cell_as_float(row, name):
     return 0 if value in (None, "") else float(value)
 
 HOLE_DEPTH = 140                 # TODO: get from the settings system, to where it is needed
+WALL_THICKNESS = 10              # TODO: get from the settings system, to where it is needed
+FLOOR_THICKNESS = 10             # TODO: get from the settings system, to where it is needed
 
 class Hole:
 
@@ -122,17 +124,19 @@ class Hole:
 
     def __init__(self, data):
         self.name = data['name']
-        self.dimensions = [float(data.get('width')),  # from one side of the hole to the other
-                           float(data.get('depth')),  # from bottom to top of the hole
+        join = data['type'] == 'join'
+        reduction = WALL_THICKNESS if join else 0
+        self.dimensions = [float(data.get('width')) - reduction*2,  # from one side of the hole to the other
+                           float(data.get('depth')) - reduction,  # from bottom to top of the hole
                            HOLE_DEPTH]                # fill in the thickness of the hole later
         # the room that this hole is in one of the walls of:
         self.adjacent = data.get('adjacent')
         # which wall the hole is in (front, left, back, right):
         self.direction = data.get('direction')
         # from the floor to the bottom of the hole:
-        self.height = cell_as_float(data, 'height')
+        self.height = cell_as_float(data, 'height') + FLOOR_THICKNESS*1.001
         # how far from the start of the wall the hole starts:
-        self.offset = cell_as_float(data, 'offset')
+        self.offset = cell_as_float(data, 'offset') + reduction
 
     def __str__(self):
         return "<hole %s %g from start of %s of box %s>" % (self.name, self.offset, self.direction, self.adjacent)
@@ -195,7 +199,7 @@ class Custom:
 # table):
 names_for_makers = {
     lambda row, opacity: Box(row, opacity): ('room', 'shelf', 'shelves', 'box'),
-    lambda row, _: Hole(row): ('door', 'window'),
+    lambda row, _: Hole(row): ('door', 'window', 'join'),
     lambda row, _: Constant(row): ('constant',),
     lambda row, _: Type(row): ('type',),
     lambda row, _: Custom(row): ('__custom__',)}
