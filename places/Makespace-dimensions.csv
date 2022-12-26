@@ -1,0 +1,40 @@
+type,name,width,depth,height,adjacent,direction,alignment,offset,colour
+room,Corridor,1490,250,260,start,,,,green
+door,Entrance door,180,200,0,Corridor,left,,20,
+join,Join at first corner of corridor,250,260,0,Corridor,right,,,
+room,Further corridor,145,470,260,Corridor,right,front,,green
+join,Join at second corner of corridor,145,260,0,Further corridor,back,,,
+room,Far corridor,820,145,260,Further corridor,behind,left,,green
+door,Fire exit from corridor,90,200,0,Further corridor,right,,40,
+room,Classroom,725,985,290,Corridor,behind,left,,yellow
+door,Classroom door,160,200,0,Classroom,front,,1,
+room,Main space,725,1660,385,Corridor,behind,right,,orange
+door,Door into main space from corridor,150,200,0,Corridor,back,,1060,
+window,First window into mainspace from corridor,120,90,125,Corridor,back,,800,
+window,Second window into mainspace from corridor,120,90,125,Corridor,back,,1310,
+door,Back door,110,220,,Main space,back,,90,
+room,Woodshop,730,615,385,Main space,left,back,,brown
+door,Woodshop door,205,160,0,Main space,left,,1140,
+room,Metalshop,170,540,285,Woodshop,left,front,,grey
+door,Entrance to metalshop,320,220,0,Woodshop,left,,10,
+room,Office,675,470,275,Further corridor,right,front,,red
+door,Office door,85,200,0,Further corridor,right,,130,
+room,Trove,570,390,385,Far corridor,behind,left,,blue
+door,Trove door,80,200,0,Further corridor,back,,60,
+room,Underkitchen,520,490,150,Main space,right,back,,blue
+door,Underkitchen door,80,125,,Main space,right,,1190,
+room,Undercraft,560,400,150,Underkitchen,front,left,,cyan
+door,Undercraft door,80,125,0,Main space,right,,1090,
+room,Kitchen,520,490,270,Underkitchen,above,front left,,yellow
+door,Door to kitchen from stairs,90,200,0,Kitchen,left,,355,
+window,Kitchen window onto main space,240,90,90,Kitchen,left,,40,
+room,Craft room,560,400,270,Undercraft,above,front left,,purple
+door,Door from kitchen to craft room,85,200,0,Kitchen,front,,195,
+door,Door from craft room to corridor to toilets,85,200,0,Craft room,right,,280,
+window,Window from craft room onto main space,240,90,90,Craft room,left,,100,
+type,shelves3x6,125,50,215,,,,,
+shelves3x6,rack1,,,,Corridor,inside,back,205,
+shelves3x6,rack2,,,,rack1,right,back,,
+shelves3x6,rack3,,,,rack2,right,back,,
+shelves3x6,rack4,,,,rack3,right,back,,
+shelves3x6,rack5,,,,Corridor,inside,front,770,
