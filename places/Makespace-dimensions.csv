@@ -20,7 +20,7 @@ door,Entrance to metalshop,320,220,0,Woodshop,left,,10,
 room,Office,675,470,275,Further corridor,right,front,,red
 door,Office door,85,200,0,Further corridor,right,,130,
 room,Trove,570,390,385,Far corridor,behind,left,,blue
-door,Trove door,80,200,0,Further corridor,back,,60,
+door,Trove door,80,200,0,Far corridor,back,,60,
 room,Underkitchen,520,490,150,Main space,right,back,,blue
 door,Underkitchen door,80,125,,Main space,right,,1190,
 room,Undercraft,560,400,150,Underkitchen,front,left,,cyan
