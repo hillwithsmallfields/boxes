@@ -3,6 +3,8 @@
 import argparse
 import csv
 
+from typing import Dict, List, Optional
+
 import rgbcolour
 
 PREAMBLE0 = """
@@ -65,7 +67,7 @@ class Box:
 
     pass
 
-    def __init__(self, data, opacity=1.0):
+    def __init__(self, data, definitions:dict):
         self.box_type = data.get('type', 'room')
         self.name = data.get('name')
         self.dimensions = [float(data.get('width')),
@@ -85,7 +87,7 @@ class Box:
         if self.colour == "":
             self.colour = [.5, .5, .5, .5]
         if isinstance(self.colour, str):
-            self.colour = rgbcolour.rgbcolour(self.colour, opacity)
+            self.colour = rgbcolour.rgbcolour(self.colour, definitions['opacity'].value)
 
     def __str__(self):
         return "<box %s of size %s at %s to %s of %s, %s-aligned>" % (
@@ -111,10 +113,6 @@ def cell_as_float(row, name):
     value = row.get(name)
     return 0 if value in (None, "") else float(value)
 
-HOLE_DEPTH = 140                 # TODO: get from the settings system, to where it is needed
-WALL_THICKNESS = 10              # TODO: get from the settings system, to where it is needed
-FLOOR_THICKNESS = 10             # TODO: get from the settings system, to where it is needed
-
 class Hole:
 
     """A cuboid negative space to punch out of the wall of a box such as room.
@@ -122,19 +120,19 @@ class Hole:
 
     pass
 
-    def __init__(self, data):
+    def __init__(self, data, definitions):
         self.name = data['name']
         join = data['type'] == 'join'
-        reduction = WALL_THICKNESS if join else 0
-        self.dimensions = [float(data.get('width')) - reduction*2,  # from one side of the hole to the other
+        reduction = definitions['wall_thickness'].value if join else 0
+        self.dimensions = [float(data.get('width')) - reduction*2,# from one side of the hole to the other
                            float(data.get('depth')) - reduction,  # from bottom to top of the hole
-                           HOLE_DEPTH]                # fill in the thickness of the hole later
+                           definitions['hole_depth'].value]
         # the room that this hole is in one of the walls of:
         self.adjacent = data.get('adjacent')
         # which wall the hole is in (front, left, back, right):
         self.direction = data.get('direction')
         # from the floor to the bottom of the hole:
-        self.height = cell_as_float(data, 'height') + FLOOR_THICKNESS*1.001
+        self.height = cell_as_float(data, 'height') + definitions['floor_thickness'].value*1.001
         # how far from the start of the wall the hole starts:
         self.offset = cell_as_float(data, 'offset') + reduction
 
@@ -163,7 +161,7 @@ class Constant:
 
     pass
 
-    def __init__(self, data):
+    def __init__(self, data, _definitions):
         self.name = data['name']
         self.value = data['width']
         self.all_data = data
@@ -179,9 +177,10 @@ class Type:
 
     pass
 
-    def __init__(self, data):
+    def __init__(self, data, _definitions):
         self.data = data
         self.name = data['name']
+        # Direct rows with this name in their type field to the implementation "Custom"
         makers[self.name] = makers['__custom__']
 
 class Custom:
@@ -190,7 +189,8 @@ class Custom:
 
     pass
 
-    def __init__(self, data):
+    def __init__(self, data, _definitions):
+        print("defining custom feature", data)
         self.data = data
 
 # Define all the names for each of the functions to make an object
@@ -198,11 +198,11 @@ class Custom:
 # function, it is neater to write them this way, then invert the
 # table):
 names_for_makers = {
-    lambda row, opacity: Box(row, opacity): ('room', 'shelf', 'shelves', 'box'),
-    lambda row, _: Hole(row): ('door', 'window', 'join'),
-    lambda row, _: Constant(row): ('constant',),
-    lambda row, _: Type(row): ('type',),
-    lambda row, _: Custom(row): ('__custom__',)}
+    lambda row, definitions: Box(row, definitions): ('room', 'shelf', 'shelves', 'box'),
+    lambda row, definitions: Hole(row, definitions): ('door', 'window', 'join'),
+    lambda row, definitions: Constant(row, definitions): ('constant',),
+    lambda row, definitions: Type(row, definitions): ('type',),
+    lambda row, definitions: Custom(row, definitions): ('__custom__',)}
 
 # Invert the table, so we can look up row types in it:
 makers = {
@@ -250,8 +250,9 @@ def position_dependents(boxes, dependents, box, level):
                                                      + dependent.offset)
 
             elif isinstance(dependent, Hole):
-                # TODO: add the position of the current box to the position of the dependent
                 box.holes.append(dependent)
+            else:
+                print("Other type:", dependent)
 
             position_dependents(boxes, dependents, dependent, level)
 
@@ -262,26 +263,27 @@ DEFAULT_CONSTANTS = {
     'ceiling_thickness': -1     # so we can see into rooms from above
 }
 
-def add_default_constants(boxes):
+def define_constant(definitions, name, value):
+    """Add a constant to the definitions."""
+    definitions[name] = Constant({'name': name, 'width': value}, definitions)
+
+def add_default_constants(definitions):
     """Set constants if not loaded from file."""
     for default_name, default_value in DEFAULT_CONSTANTS.items():
-        if default_name not in boxes:
-            boxes[default_name] = Constant({'name': default_name, 'width': default_value})
+        if default_name not in definitions:
+            define_constant(definitions, default_name, default_value)
 
-def read_layout(filename:str, opacity:float, limit=None):
+def read_layout(filename:str, definitions:dict, limit=None):
     """Read a file of layout data."""
     with open(filename) as instream:
-        return {row['name']: makers[row.get('type', 'room')](row, opacity)
+        return {row['name']: makers[row.get('type', 'room')](row, definitions)
                 for row in list(csv.DictReader(instream))[0:limit]}
 
 def adjust_dimensions(boxes):
     """Add some dimensional details."""
-    add_default_constants(boxes)
-
     wall_thickness = boxes['wall_thickness'].value
     floor_thickness = boxes['floor_thickness'].value
     ceiling_thickness = boxes['ceiling_thickness'].value
-    hole_depth = wall_thickness * 4
 
     # The dimensions of rooms are presumed to be given as internal:
     for box in boxes.values():
@@ -319,16 +321,22 @@ def show_tree(dependents, start='start', depth=0):
             print("|   " * depth + child)
             show_tree(dependents, child, depth+1)
 
-def make_scad_layout(input_file_name:str,
+def make_scad_layout(input_file_names:List[str],
                      output:str,
                      opacity:float = 1.0,
                      verbose:bool=False,
                      debug:bool=False,
                      limit=None):
-    """Read a layout definition file and produce a 3D model file from it."""
-    boxes = read_layout(input_file_name, opacity, limit)
+    """Read layout definition files and produce a 3D model file from them."""
 
-    dependents, first_box = generate_tree(boxes)
+    definitions = {}
+    add_default_constants(definitions)
+    define_constant(definitions, 'opacity', opacity)
+
+    for input_file_name in input_file_names:
+        definitions.update(read_layout(input_file_name, limit=limit, definitions=definitions))
+
+    dependents, first_box = generate_tree(definitions)
 
     if verbose:
         show_tree(dependents)
@@ -336,18 +344,18 @@ def make_scad_layout(input_file_name:str,
     if 'start' not in dependents:
         print("No starting point given")
 
-    sized_preamble = adjust_dimensions(boxes)
+    sized_preamble = adjust_dimensions(definitions)
 
     # Now process the tree
     first_box.position = [0.0, 0.0, 0.0]
-    position_dependents(boxes, dependents, first_box, 1)
+    position_dependents(definitions, dependents, first_box, 1)
 
     with open(output, 'w') as outstream:
         outstream.write("""// Produced from %s\n""" % input_file_name)
         outstream.write(sized_preamble)
         outstream.write(PREAMBLE1DEBUG if debug else PREAMBLE1)
         holes = "".join(box.write_scad(outstream)
-                        for box in boxes.values()
+                        for box in definitions.values()
                         if isinstance(box, Box))
         outstream.write(INTERAMBLEDEBUG if debug else INTERAMBLE)
         outstream.write(holes)
@@ -356,8 +364,6 @@ def make_scad_layout(input_file_name:str,
 def get_args():
     """Get the command line args."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_file_name",
-                        help="""A CSV file with fields as described in the accompanying README.md file.""")
     parser.add_argument("--output", "-o",
                         help="""The OpenSCAD file to write the output to.""")
     parser.add_argument("--opacity", "--alpha", "-a",
@@ -372,6 +378,9 @@ def get_args():
     parser.add_argument("--limit", "-l",
                         type=int,
                         help="""Use only this many rows of the input, for incremental debugging.""")
+    parser.add_argument("input_file_names",
+                        nargs='+',
+                        help="""A CSV file with fields as described in the accompanying README.md file.""")
     return vars(parser.parse_args())
 
 if __name__ == '__main__':

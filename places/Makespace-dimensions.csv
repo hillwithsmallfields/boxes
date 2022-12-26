@@ -32,7 +32,6 @@ room,Craft room,560,400,270,Undercraft,above,front left,,purple
 door,Door from kitchen to craft room,85,200,0,Kitchen,front,,195,
 door,Door from craft room to corridor to toilets,85,200,0,Craft room,right,,280,
 window,Window from craft room onto main space,240,90,90,Craft room,left,,100,
-type,shelves3x6,125,50,215,,,,,
 shelves3x6,rack1,,,,Corridor,inside,back,205,
 shelves3x6,rack2,,,,rack1,right,back,,
 shelves3x6,rack3,,,,rack2,right,back,,
