@@ -3,6 +3,7 @@
 import argparse
 import csv
 
+from collections import defaultdict
 from typing import Dict, List, Optional
 
 import rgbcolour
@@ -69,7 +70,7 @@ class Box:
 
     def __init__(self, data, definitions:dict):
         self.box_type = data.get('type', 'room')
-        self.name = data.get('name')
+        self.name = data['name']
         self.dimensions = [float(data.get('width')),
                            float(data.get('depth')),
                            float(data.get('height'))]
@@ -172,26 +173,55 @@ class Constant:
 class Type:
 
     """A type definition.
-
-    Not implemented yet."""
+    """
 
     pass
 
     def __init__(self, data, _definitions):
         self.data = data
         self.name = data['name']
+        self.dimensions = [float(data.get('width')),
+                           float(data.get('depth')),
+                           float(data.get('height'))]
         # Direct rows with this name in their type field to the implementation "Custom"
         makers[self.name] = makers['__custom__']
+        print("Defined custom type", self.name)
 
 class Custom:
 
-    """A custom type, as defined by the Type type of row."""
+    """A custom type, as defined by the Type type of row.
+
+    This class is for instantiating the type, not defining it.  Row
+    handlers for rows of custom types point here, regardless of the
+    name of the custom type.
+
+    """
 
     pass
 
-    def __init__(self, data, _definitions):
-        print("defining custom feature", data)
+    def __init__(self, data, definitions):
+        self.box_type = data['type']
+        self.name = data['name']
+        self.dimensions = definitions[self.box_type].dimensions
+        self.position = [0.0, 0.0, 0.0]
+        self.adjacent = data['adjacent']
+        self.direction = data.get('direction')
+        self.alignment = data.get('alignment')
+        self.colour = data.get('colour', [.5, .5, .5, .5])
+        if self.colour == "":
+            self.colour = [.5, .5, .5, .5]
+        self.offset = float(data.get('offset', 0.0) or 0.0)
         self.data = data
+        print("Instantiating custom feature of type", self.box_type, "and dimensions", self.dimensions, "adjacent to", self.adjacent)
+
+    def write_scad(self, stream):
+        """Write the SCAD code for this custom feature instance."""
+        stream.write("""    box(%s, %s, %s, "%s");\n""" % (
+            self.position,
+            self.dimensions,
+            ('"%s"' % self.colour) if isinstance(self.colour, str) else self.colour,
+            self.name))
+        return ""
 
 # Define all the names for each of the functions to make an object
 # from a spreadsheet row (since there are multiple names for each
@@ -217,8 +247,7 @@ def position_dependents(definitions, dependents, box):
         for dependent_name in dependents[box.name]:
             dependent = definitions[dependent_name]
 
-            if isinstance(dependent, Box):
-
+            if isinstance(dependent, (Box, Custom)):
                 # scan through the coordinates: X, Y, Z for
                 # neighbouring boxes that begin where the current one
                 # ends:
@@ -274,7 +303,7 @@ def add_default_constants(definitions):
             define_constant(definitions, default_name, default_value)
 
 def read_layout(filename:str, definitions:dict, limit=None):
-    """Read a file of layout data."""
+    """Reads a file of layout data, returning a list of objects each made from a row."""
     with open(filename) as instream:
         return {row['name']: makers[row.get('type', 'room')](row, definitions)
                 for row in list(csv.DictReader(instream))[0:limit]}
@@ -297,21 +326,15 @@ def adjust_dimensions(boxes):
 
 def generate_tree(boxes):
     """Work out the tree structure of what depends on what."""
-    dependents = {}
+    dependents = defaultdict(list)
     first_box = None
     for box in boxes.values():
-        if not isinstance(box, (Box, Hole)):
-            continue
-        adjacent = box.adjacent
-        if adjacent == 'start':
-            if 'start' in dependents:
-                print("There should be only one box dependent on 'start'.")
-            dependents['start'] = [box.name]
-            first_box = box
-        else:
-            if adjacent not in dependents:
-                dependents[adjacent] = [] # TODO: use defaultdict
-            dependents[adjacent].append(box.name)
+        if isinstance(box, (Box, Hole, Custom)):
+            if box.adjacent == 'start':
+                if 'start' in dependents:
+                    print("There should be only one box dependent on 'start'.")
+                first_box = box
+            dependents[box.adjacent].append(box.name)
     return dependents, first_box
 
 def show_tree(dependents, start='start', depth=0):
@@ -356,7 +379,7 @@ def make_scad_layout(input_file_names:List[str],
         outstream.write(PREAMBLE1DEBUG if debug else PREAMBLE1)
         holes = "".join(box.write_scad(outstream)
                         for box in definitions.values()
-                        if isinstance(box, Box))
+                        if isinstance(box, (Box, Custom)))
         outstream.write(INTERAMBLEDEBUG if debug else INTERAMBLE)
         outstream.write(holes)
         outstream.write(POSTAMBLEDEBUG if debug else POSTAMBLE)
