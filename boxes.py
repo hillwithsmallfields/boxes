@@ -210,12 +210,12 @@ makers = {
     for maker, names in names_for_makers.items()
     for name in names}
 
-def position_dependents(boxes, dependents, box, level):
+def position_dependents(definitions, dependents, box):
     """Position boxes dependent on a given box.
     Then position their dependents, etc."""
     if box.name in dependents:
         for dependent_name in dependents[box.name]:
-            dependent = boxes[dependent_name]
+            dependent = definitions[dependent_name]
 
             if isinstance(dependent, Box):
 
@@ -254,7 +254,7 @@ def position_dependents(boxes, dependents, box, level):
             else:
                 print("Other type:", dependent)
 
-            position_dependents(boxes, dependents, dependent, level)
+            position_dependents(definitions, dependents, dependent)
 
 DEFAULT_CONSTANTS = {
     'wall_thickness': 10,
@@ -310,7 +310,7 @@ def generate_tree(boxes):
             first_box = box
         else:
             if adjacent not in dependents:
-                dependents[adjacent] = []
+                dependents[adjacent] = [] # TODO: use defaultdict
             dependents[adjacent].append(box.name)
     return dependents, first_box
 
@@ -348,7 +348,7 @@ def make_scad_layout(input_file_names:List[str],
 
     # Now process the tree
     first_box.position = [0.0, 0.0, 0.0]
-    position_dependents(definitions, dependents, first_box, 1)
+    position_dependents(definitions, dependents, first_box)
 
     with open(output, 'w') as outstream:
         outstream.write("""// Produced from %s\n""" % input_file_name)
